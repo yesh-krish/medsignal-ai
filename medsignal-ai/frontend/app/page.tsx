@@ -2,16 +2,17 @@
 
 import { useEffect, useState } from "react";
 
+import { DrugSearchBar } from "@/components/DrugSearchBar";
+
 type HealthState = "checking" | "ok" | "error";
 
 export default function Home() {
-  const [query, setQuery] = useState("");
   const [health, setHealth] = useState<HealthState>("checking");
 
-  useEffect(() => {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+  const backendUrl =
+    process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
+  useEffect(() => {
     fetch(`${backendUrl}/health`)
       .then((response) => {
         if (!response.ok) {
@@ -23,7 +24,7 @@ export default function Home() {
         setHealth(data.status === "ok" ? "ok" : "error");
       })
       .catch(() => setHealth("error"));
-  }, []);
+  }, [backendUrl]);
 
   return (
     <main className="min-h-screen bg-[#f7faf9]">
@@ -36,31 +37,14 @@ export default function Home() {
             MedSignal AI
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-            A clean local scaffold for searching medication names and building
-            clinical signal workflows over time.
+            Search a medication to open a safety dashboard with FDA label
+            sections and reported adverse events.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <label
-              htmlFor="medication-search"
-              className="mb-3 block text-sm font-medium text-slate-700"
-            >
-              Medication name
-            </label>
-            <input
-              id="medication-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search medications"
-              className="h-12 w-full rounded-md border border-slate-300 bg-white px-4 text-base text-slate-950 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
-            />
-            <div className="mt-4 min-h-12 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              {query
-                ? `Ready to search for "${query}" once medication search is wired.`
-                : "Enter a medication name to begin."}
-            </div>
+            <DrugSearchBar />
           </div>
 
           <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

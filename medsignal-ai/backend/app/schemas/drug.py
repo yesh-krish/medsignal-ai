@@ -21,3 +21,9 @@ class DrugRead(DrugBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DrugSearchResult(DrugBase):
+    id: int
+
+    model_config = ConfigDict(from_attributes=True)

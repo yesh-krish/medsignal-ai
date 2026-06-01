@@ -21,6 +21,11 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://medsignal:medsignal@postgres:5432/medsignal
       ENVIRONMENT: local
+      SUMMARIZER_MODEL_NAME: sshleifer/distilbart-cnn-6-6
+      SUMMARIZER_TASK: summarization
+      SUMMARIZER_MAX_INPUT_CHARS: 4000
+      SUMMARIZER_MAX_NEW_TOKENS: 180
+      SUMMARIZER_MIN_NEW_TOKENS: 60
     ports:
       - "8000:8000"
     volumes:
