@@ -16,6 +16,7 @@ class SafetySummary(Base):
     input_length: Mapped[int] = mapped_column(Integer, nullable=False)
     output_length: Mapped[int] = mapped_column(Integer, nullable=False)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    mlflow_run_id: Mapped[str | None] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -21,6 +21,7 @@ The app will be available at:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
 - Health check: http://localhost:8000/health
+- MLflow UI: http://localhost:5000
 
 ## Backend
 
@@ -48,3 +49,18 @@ alembic revision --autogenerate -m "your migration"
 
 The frontend reads the backend URL from `NEXT_PUBLIC_BACKEND_URL` and displays
 the backend health status on the homepage.
+
+## MLflow Tracking
+
+Docker Compose starts an MLflow tracking server at http://localhost:5000.
+
+Safety summaries generated from FDA label sections are logged to the
+`medsignal-label-summarization` experiment. Each run records:
+
+- Parameters: `model_name`, `drug_id`, `normalized_drug_name`
+- Metrics: `input_length`, `output_length`, `latency_ms`
+- Artifact: `generated_summary.txt`
+
+The backend connects to MLflow through `MLFLOW_TRACKING_URI`. In Docker Compose,
+the backend uses `http://mlflow:5000`; from your browser, open the UI at
+http://localhost:5000.

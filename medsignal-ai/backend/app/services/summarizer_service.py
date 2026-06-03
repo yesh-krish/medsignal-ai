@@ -21,6 +21,7 @@ class SummarizerUnavailableError(Exception):
 
 def generate_and_save_safety_summary(
     drug_id: int,
+    normalized_drug_name: str,
     label: DrugLabel,
     db: Session,
 ) -> tuple[SafetySummary, str]:
@@ -37,6 +38,15 @@ def generate_and_save_safety_summary(
     generated_text = _generate_summary(model_input)
     latency_ms = int((perf_counter() - started_at) * 1000)
     summary_text = _clean_summary(generated_text)
+    mlflow_run_id = _log_summary_to_mlflow(
+        model_name=settings.summarizer_model_name,
+        drug_id=drug_id,
+        normalized_drug_name=normalized_drug_name,
+        input_length=len(model_input),
+        output_length=len(summary_text),
+        latency_ms=latency_ms,
+        summary_text=summary_text,
+    )
 
     summary = SafetySummary(
         drug_id=drug_id,
@@ -45,6 +55,7 @@ def generate_and_save_safety_summary(
         input_length=len(model_input),
         output_length=len(summary_text),
         latency_ms=latency_ms,
+        mlflow_run_id=mlflow_run_id,
     )
     db.add(summary)
     db.commit()
@@ -106,6 +117,34 @@ def _generate_summary(prompt: str) -> str:
     if not generated:
         raise SummarizerUnavailableError("AI summarizer output was empty")
     return str(generated)
+
+
+def _log_summary_to_mlflow(
+    model_name: str,
+    drug_id: int,
+    normalized_drug_name: str,
+    input_length: int,
+    output_length: int,
+    latency_ms: int,
+    summary_text: str,
+) -> str:
+    settings = get_settings()
+    try:
+        import mlflow
+
+        mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+        mlflow.set_experiment(settings.mlflow_experiment_name)
+        with mlflow.start_run() as run:
+            mlflow.log_param("model_name", model_name)
+            mlflow.log_param("drug_id", drug_id)
+            mlflow.log_param("normalized_drug_name", normalized_drug_name)
+            mlflow.log_metric("input_length", input_length)
+            mlflow.log_metric("output_length", output_length)
+            mlflow.log_metric("latency_ms", latency_ms)
+            mlflow.log_text(summary_text, "generated_summary.txt")
+            return run.info.run_id
+    except Exception as exc:
+        raise SummarizerUnavailableError("MLflow tracking failed") from exc
 
 
 @lru_cache

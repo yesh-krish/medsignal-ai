@@ -11,6 +11,7 @@ class SafetySummaryRead(BaseModel):
     input_length: int
     output_length: int
     latency_ms: int
+    mlflow_run_id: str | None
     disclaimer: str
     created_at: datetime
 

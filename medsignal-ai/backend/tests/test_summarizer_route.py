@@ -71,7 +71,9 @@ def create_drug_with_label() -> int:
 def test_summarize_label_route(monkeypatch):
     drug_id = create_drug_with_label()
 
-    def fake_generate_and_save_safety_summary(drug_id, label, db):
+    def fake_generate_and_save_safety_summary(
+        drug_id, normalized_drug_name, label, db
+    ):
         summary = SafetySummary(
             drug_id=drug_id,
             summary_text="Plain-English safety summary.",
@@ -79,6 +81,7 @@ def test_summarize_label_route(monkeypatch):
             input_length=100,
             output_length=30,
             latency_ms=25,
+            mlflow_run_id="run-123",
         )
         db.add(summary)
         db.commit()
@@ -97,6 +100,7 @@ def test_summarize_label_route(monkeypatch):
     assert response.status_code == 200
     assert response.json()["summary_text"] == "Plain-English safety summary."
     assert response.json()["model_name"] == "test-model"
+    assert response.json()["mlflow_run_id"] == "run-123"
     assert response.json()["disclaimer"] == "Educational disclaimer."
 
 
@@ -111,7 +115,7 @@ def test_summarize_label_route_drug_not_found():
 def test_summarize_label_route_ai_failure(monkeypatch):
     drug_id = create_drug_with_label()
 
-    def raise_failure(drug_id, label, db):
+    def raise_failure(drug_id, normalized_drug_name, label, db):
         raise summarizer_service.SummarizerUnavailableError()
 
     monkeypatch.setattr(

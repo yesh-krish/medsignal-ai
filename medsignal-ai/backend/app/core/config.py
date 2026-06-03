@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     summarizer_max_input_chars: int = 4000
     summarizer_max_new_tokens: int = 180
     summarizer_min_new_tokens: int = 60
+    mlflow_tracking_uri: str = "http://mlflow:5000"
+    mlflow_experiment_name: str = "medsignal-label-summarization"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

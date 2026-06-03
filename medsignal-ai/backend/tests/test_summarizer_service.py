@@ -32,8 +32,13 @@ def test_generate_and_save_safety_summary(monkeypatch):
         "_generate_summary",
         lambda prompt: "Plain-English safety summary.",
     )
+    monkeypatch.setattr(
+        summarizer_service,
+        "_log_summary_to_mlflow",
+        lambda **kwargs: "mlflow-run-id",
+    )
 
-    summary, disclaimer = generate_and_save_safety_summary(1, label, db)
+    summary, disclaimer = generate_and_save_safety_summary(1, "Tylenol", label, db)
 
     assert summary.id is not None
     assert summary.drug_id == 1
@@ -42,6 +47,7 @@ def test_generate_and_save_safety_summary(monkeypatch):
     assert summary.input_length > 0
     assert summary.output_length == len("Plain-English safety summary.")
     assert summary.latency_ms >= 0
+    assert summary.mlflow_run_id == "mlflow-run-id"
     assert disclaimer == SAFETY_SUMMARY_DISCLAIMER
     db.close()
 
@@ -65,7 +71,7 @@ def test_generate_and_save_safety_summary_rejects_empty_label():
     )
 
     try:
-        generate_and_save_safety_summary(1, label, db)
+        generate_and_save_safety_summary(1, "Tylenol", label, db)
     except ValueError as exc:
         assert "No label safety sections" in str(exc)
     else:
@@ -87,3 +93,44 @@ def test_clean_summary_trims_incomplete_final_sentence():
     )
 
     assert cleaned == "Warnings are listed."
+
+
+def test_generate_and_save_safety_summary_logs_mlflow_metadata(monkeypatch):
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = TestingSessionLocal()
+    label = DrugLabel(
+        drug_id=1,
+        set_id="label-set-id",
+        brand_name=["Tylenol"],
+        generic_name=["Acetaminophen"],
+        warnings=["Warning text"],
+        boxed_warning=None,
+        adverse_reactions=["Rash"],
+        contraindications=["Known allergy"],
+        indications_and_usage=None,
+        raw_label_json={},
+    )
+    logged_kwargs = {}
+    monkeypatch.setattr(summarizer_service, "_generate_summary", lambda prompt: "Summary")
+
+    def fake_log_summary_to_mlflow(**kwargs):
+        logged_kwargs.update(kwargs)
+        return "run-123"
+
+    monkeypatch.setattr(
+        summarizer_service, "_log_summary_to_mlflow", fake_log_summary_to_mlflow
+    )
+
+    summary, _ = generate_and_save_safety_summary(1, "Tylenol", label, db)
+
+    assert summary.mlflow_run_id == "run-123"
+    assert logged_kwargs["model_name"] == "sshleifer/distilbart-cnn-6-6"
+    assert logged_kwargs["drug_id"] == 1
+    assert logged_kwargs["normalized_drug_name"] == "Tylenol"
+    assert logged_kwargs["input_length"] == summary.input_length
+    assert logged_kwargs["output_length"] == summary.output_length
+    assert logged_kwargs["latency_ms"] == summary.latency_ms
+    assert logged_kwargs["summary_text"] == "Summary."
+    db.close()

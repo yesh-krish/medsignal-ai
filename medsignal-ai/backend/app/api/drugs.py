@@ -158,7 +158,7 @@ def summarize_drug_label(
 
     try:
         summary, disclaimer = summarizer_service.generate_and_save_safety_summary(
-            drug.id, label, db
+            drug.id, drug.normalized_name, label, db
         )
     except ValueError as exc:
         raise HTTPException(
@@ -179,6 +179,7 @@ def summarize_drug_label(
         "input_length": summary.input_length,
         "output_length": summary.output_length,
         "latency_ms": summary.latency_ms,
+        "mlflow_run_id": summary.mlflow_run_id,
         "disclaimer": disclaimer,
         "created_at": summary.created_at,
     }

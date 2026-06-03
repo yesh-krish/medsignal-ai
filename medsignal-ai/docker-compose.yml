@@ -21,6 +21,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://medsignal:medsignal@postgres:5432/medsignal
       ENVIRONMENT: local
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: medsignal-label-summarization
       SUMMARIZER_MODEL_NAME: sshleifer/distilbart-cnn-6-6
       SUMMARIZER_TASK: summarization
       SUMMARIZER_MAX_INPUT_CHARS: 4000
@@ -33,6 +35,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mlflow:
+        condition: service_started
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.3
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - /mlflow/mlruns
+      - --default-artifact-root
+      - /mlflow/mlartifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
 
   frontend:
     build:
@@ -49,3 +71,4 @@ services:
 
 volumes:
   postgres_data:
+  mlflow_data:
