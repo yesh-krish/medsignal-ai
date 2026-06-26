@@ -110,6 +110,7 @@ def get_drug(
 def get_reported_adverse_events(
     drug_id: int,
     limit: int = Query(100, ge=1, le=500),
+    refresh: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> list[AdverseEventRead]:
     drug = _get_drug_or_404(drug_id, db)
@@ -120,6 +121,11 @@ def get_reported_adverse_events(
         )
 
     try:
+        saved_events = openfda_event_service.get_saved_reported_adverse_events(
+            drug.id, db
+        )
+        if saved_events and not refresh:
+            return saved_events[:limit]
         return openfda_event_service.fetch_and_save_reported_adverse_events(
             drug.normalized_name, drug.id, db, limit=limit
         )
@@ -150,6 +156,7 @@ def get_latest_event_ingestion_run(
 @router.get("/{drug_id}/event-trends", response_model=EventTrends)
 def get_reported_adverse_event_trends(
     drug_id: int,
+    refresh: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> EventTrends:
     drug = _get_drug_or_404(drug_id, db)
@@ -160,9 +167,21 @@ def get_reported_adverse_event_trends(
         )
 
     try:
-        return openfda_event_service.fetch_reported_adverse_event_trends(
+        saved_trends = openfda_event_service.get_saved_event_trends(drug.id, db)
+        if saved_trends is not None and not refresh:
+            return saved_trends
+        if not refresh:
+            return {
+                "top_reported_reactions": [],
+                "reports_by_year": {},
+                "seriousness_breakdown": {},
+                "sex_breakdown": {},
+                "total_reports": 0,
+            }
+        trends = openfda_event_service.fetch_reported_adverse_event_trends(
             drug.normalized_name
         )
+        return openfda_event_service.save_event_trends(drug.id, trends, db)
     except openfda_event_service.OpenFDATimeoutError as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -269,6 +288,7 @@ def get_drug_signal_timeline(
 @router.get("/{drug_id}/label", response_model=DrugLabelRead | None)
 def get_drug_label(
     drug_id: int,
+    refresh: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> DrugLabelRead | None:
     drug = _get_drug_or_404(drug_id, db)
@@ -279,6 +299,9 @@ def get_drug_label(
         )
 
     try:
+        saved_label = openfda_label_service.get_saved_drug_label(drug.id, db)
+        if saved_label is not None and not refresh:
+            return saved_label
         return openfda_label_service.fetch_and_save_drug_label(
             drug.normalized_name, drug.id, db
         )

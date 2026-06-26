@@ -147,7 +147,7 @@ def test_get_reported_adverse_event_trends(monkeypatch):
     )
     client = TestClient(app)
 
-    response = client.get(f"/api/drugs/{drug_id}/event-trends")
+    response = client.get(f"/api/drugs/{drug_id}/event-trends?refresh=true")
 
     assert response.status_code == 200
     assert response.json()["total_reports"] == 3

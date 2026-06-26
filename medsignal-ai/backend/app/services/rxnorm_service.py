@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -34,6 +34,10 @@ def search_and_save_drug(query: str, db: Session) -> Drug:
     if not cleaned_query:
         raise ValueError("Query must not be empty")
 
+    cached_drug = _find_cached_drug(cleaned_query, db)
+    if cached_drug is not None:
+        return cached_drug
+
     rxcui = _find_best_rxcui(cleaned_query)
     concept = _get_concept_properties(rxcui)
 
@@ -57,6 +61,22 @@ def search_and_save_drug(query: str, db: Session) -> Drug:
     db.commit()
     db.refresh(drug)
     return drug
+
+
+def _find_cached_drug(query: str, db: Session) -> Drug | None:
+    normalized_query = query.casefold()
+    return db.scalar(
+        select(Drug)
+        .where(
+            or_(
+                func.lower(Drug.input_name) == normalized_query,
+                func.lower(Drug.normalized_name) == normalized_query,
+                func.lower(Drug.synonym) == normalized_query,
+            )
+        )
+        .order_by(Drug.updated_at.desc(), Drug.id.desc())
+        .limit(1)
+    )
 
 
 def _find_best_rxcui(query: str) -> str:

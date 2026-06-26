@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.adverse_event import AdverseEvent
+from app.models.event_trend import EventTrend
 from app.models.ingestion_run import IngestionRun
 
 
@@ -142,6 +143,26 @@ def get_latest_ingestion_run(drug_id: int, db: Session) -> IngestionRun | None:
         .order_by(IngestionRun.started_at.desc(), IngestionRun.id.desc())
         .limit(1)
     )
+
+
+def get_saved_event_trends(drug_id: int, db: Session) -> dict[str, Any] | None:
+    trend = db.scalar(select(EventTrend).where(EventTrend.drug_id == drug_id))
+    if trend is None:
+        return None
+    return trend.trends_json
+
+
+def save_event_trends(
+    drug_id: int, trends: dict[str, Any], db: Session
+) -> dict[str, Any]:
+    trend = db.scalar(select(EventTrend).where(EventTrend.drug_id == drug_id))
+    if trend is None:
+        trend = EventTrend(drug_id=drug_id, trends_json=trends)
+        db.add(trend)
+    else:
+        trend.trends_json = trends
+    db.commit()
+    return trends
 
 
 def build_reported_adverse_event_trends(events: list[AdverseEvent]) -> dict[str, Any]:
