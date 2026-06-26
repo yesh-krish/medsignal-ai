@@ -111,3 +111,32 @@ export interface SignalAnalysis {
   run: SignalAnalysisRun;
   results: SignalResult[];
 }
+
+export interface ComparedDrug {
+  drug: Drug;
+  trends: EventTrends;
+  label: DrugLabel | null;
+}
+
+export interface SharedReaction {
+  reaction: string;
+  left_count: number;
+  right_count: number;
+  absolute_difference: number;
+}
+
+export interface LabelSectionComparison {
+  section: string;
+  left_available: boolean;
+  right_available: boolean;
+  left_count: number;
+  right_count: number;
+}
+
+export interface DrugComparison {
+  left: ComparedDrug;
+  right: ComparedDrug;
+  shared_top_reported_reactions: SharedReaction[];
+  label_section_comparison: LabelSectionComparison[];
+  disclaimer: string;
+}

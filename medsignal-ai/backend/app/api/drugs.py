@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.models.drug import Drug
 from app.schemas.adverse_event import AdverseEventRead, EventTrends
 from app.schemas.drug import DrugSearchResult
+from app.schemas.drug_comparison import DrugComparisonResponse
 from app.schemas.drug_label import DrugLabelRead
 from app.schemas.ingestion_run import IngestionRunRead
 from app.schemas.safety_alert import SafetyAlertRead
@@ -13,6 +14,7 @@ from app.schemas.safety_summary import SafetySummaryRead
 from app.schemas.signal_analysis import SignalAnalysisResponse, SignalAnalysisRunRead
 from app.services import openfda_event_service
 from app.services import openfda_label_service
+from app.services import drug_comparison_service
 from app.services import rxnorm_service
 from app.services import safety_signal_service
 from app.services import summarizer_service
@@ -48,6 +50,47 @@ def search_drugs(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="RxNorm request failed",
+        ) from exc
+
+
+@router.get("/compare", response_model=DrugComparisonResponse)
+def compare_drugs(
+    left_id: int = Query(..., gt=0),
+    right_id: int = Query(..., gt=0),
+    db: Session = Depends(get_db),
+) -> DrugComparisonResponse:
+    if left_id == right_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Choose two different medications to compare",
+        )
+
+    left_drug = _get_drug_or_404(left_id, db)
+    right_drug = _get_drug_or_404(right_id, db)
+    try:
+        return drug_comparison_service.build_drug_comparison(
+            left_drug, right_drug, db
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except (
+        openfda_event_service.OpenFDATimeoutError,
+        openfda_label_service.OpenFDALabelTimeoutError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="openFDA comparison request timed out",
+        ) from exc
+    except (
+        openfda_event_service.OpenFDAUpstreamError,
+        openfda_label_service.OpenFDALabelUpstreamError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="openFDA comparison request failed",
         ) from exc
 
 
