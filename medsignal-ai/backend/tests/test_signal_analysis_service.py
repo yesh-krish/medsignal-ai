@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.drug import Drug
+from app.models.signal_analysis import SignalAnalysisRun, SignalResult
 from app.services import openfda_event_service, signal_analysis_service
 from app.services.openfda_event_service import ReactionSignalCount, SignalCountData
 
@@ -110,3 +111,78 @@ def test_analyze_and_save_signals_preserves_history(
     assert second_run.id != first_run.id
     assert latest is not None
     assert latest[0].id == second_run.id
+
+
+def test_get_signal_timeline_classifies_signal_statuses(db_session):
+    runs = [
+        SignalAnalysisRun(
+            drug_id=1,
+            status="succeeded",
+            source="openFDA FAERS",
+            comparator_scope="All openFDA FAERS reports",
+            minimum_reports=3,
+            prr_threshold=2,
+            ror_ci_lower_threshold=1,
+            target_total_reports=100,
+            comparator_total_reports=1000,
+        ),
+        SignalAnalysisRun(
+            drug_id=1,
+            status="succeeded",
+            source="openFDA FAERS",
+            comparator_scope="All openFDA FAERS reports",
+            minimum_reports=3,
+            prr_threshold=2,
+            ror_ci_lower_threshold=1,
+            target_total_reports=100,
+            comparator_total_reports=1000,
+        ),
+    ]
+    db_session.add_all(runs)
+    db_session.commit()
+    for run in runs:
+        db_session.refresh(run)
+
+    db_session.add_all(
+        [
+            make_signal_result(runs[0].id, "Nausea", 2.4, True),
+            make_signal_result(runs[1].id, "Nausea", 2.8, True),
+            make_signal_result(runs[0].id, "Rash", 2.3, True),
+            make_signal_result(runs[1].id, "Rash", 1.2, False),
+            make_signal_result(runs[0].id, "Headache", 1.4, False),
+            make_signal_result(runs[1].id, "Headache", 2.5, True),
+        ]
+    )
+    db_session.commit()
+
+    timeline = signal_analysis_service.get_signal_timeline(1, db_session)
+
+    statuses = {item["reaction"]: item["status"] for item in timeline["reactions"]}
+    assert timeline["run_count"] == 2
+    assert statuses["Headache"] == "new"
+    assert statuses["Nausea"] == "continuing"
+    assert statuses["Rash"] == "resolved"
+    assert len(timeline["reactions"][0]["points"]) == 2
+
+
+def make_signal_result(
+    run_id: int,
+    reaction: str,
+    prr: float,
+    is_potential_signal: bool,
+) -> SignalResult:
+    return SignalResult(
+        run_id=run_id,
+        drug_id=1,
+        reaction=reaction,
+        target_with_reaction=10,
+        target_without_reaction=90,
+        comparator_with_reaction=50,
+        comparator_without_reaction=950,
+        prr=prr,
+        ror=prr + 0.1,
+        ror_ci_lower=1.2 if is_potential_signal else 0.8,
+        ror_ci_upper=3.5,
+        is_potential_signal=is_potential_signal,
+        explanation="Test signal explanation",
+    )

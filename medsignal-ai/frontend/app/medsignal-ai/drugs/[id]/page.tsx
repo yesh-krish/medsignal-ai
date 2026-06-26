@@ -12,6 +12,7 @@ import { ReactionBarChart } from "@/components/ReactionBarChart";
 import { ReportsOverTimeChart } from "@/components/ReportsOverTimeChart";
 import { SafetyAlertsCard } from "@/components/SafetyAlertsCard";
 import { SignalAnalysisPanel } from "@/components/SignalAnalysisPanel";
+import { SignalTimelinePanel } from "@/components/SignalTimelinePanel";
 import { SeriousnessBreakdownChart } from "@/components/SeriousnessBreakdownChart";
 import type {
   Drug,
@@ -22,6 +23,7 @@ import type {
   SafetySummary,
   SignalAnalysis,
   SignalAnalysisRun,
+  SignalTimeline,
 } from "@/lib/api-types";
 
 type PageProps = {
@@ -46,6 +48,7 @@ export default function DrugDashboard({ params }: PageProps) {
   const [summary, setSummary] = useState<SafetySummary | null>(null);
   const [signalAnalysis, setSignalAnalysis] = useState<SignalAnalysis | null>(null);
   const [signalHistory, setSignalHistory] = useState<SignalAnalysisRun[]>([]);
+  const [signalTimeline, setSignalTimeline] = useState<SignalTimeline | null>(null);
   const [trends, setTrends] = useState<EventTrends>(emptyTrends);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshingReports, setIsRefreshingReports] = useState(false);
@@ -90,6 +93,9 @@ export default function DrugDashboard({ params }: PageProps) {
         const signalHistoryPromise = fetch(
           `${backendUrl}/api/drugs/${params.id}/signals/history`,
         );
+        const signalTimelinePromise = fetch(
+          `${backendUrl}/api/drugs/${params.id}/signals/timeline`,
+        );
 
         const eventsResponse = await eventsPromise;
         if (eventsResponse.status === 504) {
@@ -112,12 +118,14 @@ export default function DrugDashboard({ params }: PageProps) {
           alertsResponse,
           signalsResponse,
           signalHistoryResponse,
+          signalTimelineResponse,
           labelResponse,
         ] = await Promise.all([
           trendsPromise,
           alertsPromise,
           signalsPromise,
           signalHistoryPromise,
+          signalTimelinePromise,
           labelPromise,
         ]);
         if (!trendsResponse.ok) {
@@ -140,6 +148,11 @@ export default function DrugDashboard({ params }: PageProps) {
         if (signalHistoryResponse.ok) {
           setSignalHistory(
             (await signalHistoryResponse.json()) as SignalAnalysisRun[],
+          );
+        }
+        if (signalTimelineResponse.ok) {
+          setSignalTimeline(
+            (await signalTimelineResponse.json()) as SignalTimeline,
           );
         }
 
@@ -215,6 +228,12 @@ export default function DrugDashboard({ params }: PageProps) {
         analysis.run,
         ...current.filter((run) => run.id !== analysis.run.id),
       ]);
+      const timelineResponse = await fetch(
+        `${backendUrl}/api/drugs/${params.id}/signals/timeline`,
+      );
+      if (timelineResponse.ok) {
+        setSignalTimeline((await timelineResponse.json()) as SignalTimeline);
+      }
     } catch (caughtError) {
       setSignalError(
         caughtError instanceof Error
@@ -280,6 +299,8 @@ export default function DrugDashboard({ params }: PageProps) {
               error={signalError}
               onAnalyze={handleAnalyzeSignals}
             />
+
+            <SignalTimelinePanel timeline={signalTimeline} />
 
             {isRefreshingReports && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-medium text-blue-900">

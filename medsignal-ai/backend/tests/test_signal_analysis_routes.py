@@ -74,6 +74,7 @@ def test_signal_analysis_routes(monkeypatch):
     analyze_response = client.post(f"/api/drugs/{drug_id}/signals/analyze")
     latest_response = client.get(f"/api/drugs/{drug_id}/signals/latest")
     history_response = client.get(f"/api/drugs/{drug_id}/signals/history")
+    timeline_response = client.get(f"/api/drugs/{drug_id}/signals/timeline")
 
     assert analyze_response.status_code == 200
     assert analyze_response.json()["results"][0]["is_potential_signal"] is True
@@ -81,6 +82,8 @@ def test_signal_analysis_routes(monkeypatch):
     assert latest_response.json()["run"]["target_total_reports"] == 1000
     assert history_response.status_code == 200
     assert len(history_response.json()) == 1
+    assert timeline_response.status_code == 200
+    assert timeline_response.json()["reactions"][0]["status"] == "new"
 
 
 def test_latest_signal_analysis_returns_null_without_run():

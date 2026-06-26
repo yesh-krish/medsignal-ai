@@ -44,3 +44,30 @@ class SignalAnalysisRunRead(BaseModel):
 class SignalAnalysisResponse(BaseModel):
     run: SignalAnalysisRunRead
     results: list[SignalResultRead]
+
+
+class SignalHistoryPoint(BaseModel):
+    run_id: int
+    completed_at: datetime | None
+    prr: float
+    ror: float
+    ror_ci_lower: float
+    ror_ci_upper: float
+    target_with_reaction: int
+    is_potential_signal: bool
+
+
+class ReactionSignalTimeline(BaseModel):
+    reaction: str
+    status: str
+    first_detected_at: datetime | None
+    latest_prr: float
+    latest_ror: float
+    latest_is_potential_signal: bool
+    points: list[SignalHistoryPoint]
+
+
+class SignalTimelineResponse(BaseModel):
+    drug_id: int
+    run_count: int
+    reactions: list[ReactionSignalTimeline]

@@ -159,21 +159,35 @@ a {
 }
 
 .status-panel,
-.project-tile {
+.project-tile,
+.experience-row,
+.education-panel,
+.skill-tile,
+.logo-cell {
   border-radius: 8px;
 }
 
-.project-tile {
+.project-tile,
+.experience-row,
+.skill-tile,
+.logo-cell {
   transition:
     transform 220ms ease,
     border-color 220ms ease,
     background 220ms ease;
 }
 
-.project-tile:hover {
+.project-tile:hover,
+.experience-row:hover,
+.skill-tile:hover,
+.logo-cell:hover {
   transform: translateY(-6px);
   border-color: rgba(255, 255, 255, 0.32);
   background: rgba(255, 255, 255, 0.12);
+}
+
+.logo-cell img {
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.28));
 }
 
 ::selection {

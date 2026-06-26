@@ -104,6 +104,7 @@ Seeded drugs:
 ```text
 GET  /health
 GET  /api/drugs/search?query={query}
+GET  /api/drugs/compare?left_id={drug_id}&right_id={drug_id}
 GET  /api/drugs/{drug_id}
 GET  /api/drugs/{drug_id}/events
 GET  /api/drugs/{drug_id}/ingestion-runs/latest
@@ -114,6 +115,7 @@ GET  /api/drugs/{drug_id}/alerts
 POST /api/drugs/{drug_id}/signals/analyze
 GET  /api/drugs/{drug_id}/signals/latest
 GET  /api/drugs/{drug_id}/signals/history
+GET  /api/drugs/{drug_id}/signals/timeline
 ```
 
 Key behavior:
@@ -127,6 +129,10 @@ Key behavior:
   MLflow.
 - Alerts route returns saved potential safety signals from the Prefect detection
   flow.
+- Comparison route shows two medications side by side while clearly stating
+  that report counts cannot establish which medication is safer.
+- Signal timeline route tracks new, continuing, resolved, and below-threshold
+  PRR/ROR results across saved analysis runs.
 
 ## MLflow Usage
 
@@ -175,7 +181,11 @@ potential safety signals for review.
 The PRR/ROR analysis compares reaction reporting for a medication against all
 other openFDA FAERS reports. Each immutable analysis run stores its thresholds,
 contingency-table counts, PRR, ROR, 95% ROR confidence interval, flag decision,
-and plain-English explanation. Run it for every saved medication with:
+and plain-English explanation. The dashboard renders explainable signal cards
+with the 2x2 count table, threshold checklist, and interpretation for each
+reaction. It also graphs PRR/ROR changes across saved runs and labels tracked
+reactions as new, continuing, resolved, or below threshold. Run it for every
+saved medication with:
 
 ```bash
 docker compose exec backend python -m app.pipelines.analyze_safety_signals
@@ -212,6 +222,8 @@ Add screenshots here when preparing the portfolio submission:
 - Reported adverse event charts
 - FDA label sections
 - AI safety summary card
+- Explainable PRR/ROR signal cards and timeline
+- Two-medication comparison
 - MLflow experiment run
 
 ## Environment Variables

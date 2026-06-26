@@ -11,7 +11,11 @@ from app.schemas.drug_label import DrugLabelRead
 from app.schemas.ingestion_run import IngestionRunRead
 from app.schemas.safety_alert import SafetyAlertRead
 from app.schemas.safety_summary import SafetySummaryRead
-from app.schemas.signal_analysis import SignalAnalysisResponse, SignalAnalysisRunRead
+from app.schemas.signal_analysis import (
+    SignalAnalysisResponse,
+    SignalAnalysisRunRead,
+    SignalTimelineResponse,
+)
 from app.services import openfda_event_service
 from app.services import openfda_label_service
 from app.services import drug_comparison_service
@@ -245,6 +249,21 @@ def get_drug_signal_analysis_history(
 ) -> list[SignalAnalysisRunRead]:
     _get_drug_or_404(drug_id, db)
     return signal_analysis_service.get_signal_analysis_history(drug_id, db, limit)
+
+
+@router.get(
+    "/{drug_id}/signals/timeline",
+    response_model=SignalTimelineResponse,
+)
+def get_drug_signal_timeline(
+    drug_id: int,
+    limit_reactions: int = Query(10, ge=1, le=25),
+    db: Session = Depends(get_db),
+) -> SignalTimelineResponse:
+    _get_drug_or_404(drug_id, db)
+    return signal_analysis_service.get_signal_timeline(
+        drug_id, db, limit_reactions=limit_reactions
+    )
 
 
 @router.get("/{drug_id}/label", response_model=DrugLabelRead | None)

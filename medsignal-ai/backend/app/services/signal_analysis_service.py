@@ -201,6 +201,114 @@ def get_signal_analysis_history(
     )
 
 
+def get_signal_timeline(
+    drug_id: int, db: Session, limit_reactions: int = 10
+) -> dict:
+    runs = list(
+        db.scalars(
+            select(SignalAnalysisRun)
+            .where(
+                SignalAnalysisRun.drug_id == drug_id,
+                SignalAnalysisRun.status == "succeeded",
+            )
+            .order_by(SignalAnalysisRun.completed_at.asc(), SignalAnalysisRun.id.asc())
+        )
+    )
+    if not runs:
+        return {"drug_id": drug_id, "run_count": 0, "reactions": []}
+
+    run_by_id = {run.id: run for run in runs}
+    results = list(
+        db.scalars(
+            select(SignalResult)
+            .where(SignalResult.run_id.in_(run_by_id.keys()))
+            .order_by(SignalResult.created_at.asc(), SignalResult.id.asc())
+        )
+    )
+    grouped: dict[str, list[SignalResult]] = {}
+    for result in results:
+        grouped.setdefault(result.reaction, []).append(result)
+
+    timelines = [_build_reaction_timeline(reaction, values, run_by_id) for reaction, values in grouped.items()]
+    timelines.sort(
+        key=lambda item: (
+            _status_rank(item["status"]),
+            -item["latest_prr"],
+            item["reaction"],
+        )
+    )
+    return {
+        "drug_id": drug_id,
+        "run_count": len(runs),
+        "reactions": timelines[:limit_reactions],
+    }
+
+
+def _build_reaction_timeline(
+    reaction: str,
+    results: list[SignalResult],
+    run_by_id: dict[int, SignalAnalysisRun],
+) -> dict:
+    ordered_results = sorted(
+        results,
+        key=lambda result: (
+            run_by_id[result.run_id].completed_at or run_by_id[result.run_id].started_at,
+            result.run_id,
+        ),
+    )
+    points = []
+    first_detected_at = None
+    for result in ordered_results:
+        run = run_by_id[result.run_id]
+        completed_at = run.completed_at or run.started_at
+        if result.is_potential_signal and first_detected_at is None:
+            first_detected_at = completed_at
+        points.append(
+            {
+                "run_id": result.run_id,
+                "completed_at": completed_at,
+                "prr": result.prr,
+                "ror": result.ror,
+                "ror_ci_lower": result.ror_ci_lower,
+                "ror_ci_upper": result.ror_ci_upper,
+                "target_with_reaction": result.target_with_reaction,
+                "is_potential_signal": result.is_potential_signal,
+            }
+        )
+
+    latest = ordered_results[-1]
+    had_prior_signal = any(
+        result.is_potential_signal for result in ordered_results[:-1]
+    )
+    if latest.is_potential_signal and had_prior_signal:
+        status = "continuing"
+    elif latest.is_potential_signal:
+        status = "new"
+    elif had_prior_signal:
+        status = "resolved"
+    else:
+        status = "below_threshold"
+
+    return {
+        "reaction": reaction,
+        "status": status,
+        "first_detected_at": first_detected_at,
+        "latest_prr": latest.prr,
+        "latest_ror": latest.ror,
+        "latest_is_potential_signal": latest.is_potential_signal,
+        "points": points,
+    }
+
+
+def _status_rank(status: str) -> int:
+    return {
+        "new": 0,
+        "continuing": 1,
+        "resolved": 2,
+        "below_threshold": 3,
+    }.get(status, 4)
+
+
 def _build_signal_explanation(
     *,
     reaction: str,

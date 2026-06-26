@@ -112,6 +112,33 @@ export interface SignalAnalysis {
   results: SignalResult[];
 }
 
+export interface SignalHistoryPoint {
+  run_id: number;
+  completed_at: string | null;
+  prr: number;
+  ror: number;
+  ror_ci_lower: number;
+  ror_ci_upper: number;
+  target_with_reaction: number;
+  is_potential_signal: boolean;
+}
+
+export interface ReactionSignalTimeline {
+  reaction: string;
+  status: "new" | "continuing" | "resolved" | "below_threshold";
+  first_detected_at: string | null;
+  latest_prr: number;
+  latest_ror: number;
+  latest_is_potential_signal: boolean;
+  points: SignalHistoryPoint[];
+}
+
+export interface SignalTimeline {
+  drug_id: number;
+  run_count: number;
+  reactions: ReactionSignalTimeline[];
+}
+
 export interface ComparedDrug {
   drug: Drug;
   trends: EventTrends;
