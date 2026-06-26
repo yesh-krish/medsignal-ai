@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Yeshas Krishna | Portfolio",
-  description: "Interactive personal portfolio for Yeshas Krishna",
+  title: "MedSignal AI",
+  description: "Medication signal monitoring scaffold",
 };
 
 export default function RootLayout({
