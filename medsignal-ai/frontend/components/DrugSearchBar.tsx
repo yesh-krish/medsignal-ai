@@ -46,7 +46,7 @@ export function DrugSearchBar({ compact = false }: DrugSearchBarProps) {
       }
 
       const drug = (await response.json()) as Drug;
-      router.push(`/drugs/${drug.id}`);
+      router.push(`/medsignal-ai/drugs/${drug.id}`);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error

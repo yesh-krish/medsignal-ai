@@ -20,6 +20,22 @@ export interface EventTrends {
   total_reports: number;
 }
 
+export interface IngestionRun {
+  id: number;
+  drug_id: number;
+  source: string;
+  status: "running" | "succeeded" | "failed";
+  query: string;
+  requested_reports: number;
+  fetched_reports: number;
+  saved_reaction_rows: number;
+  duplicate_reports_skipped: number;
+  source_last_updated: string | null;
+  error_message: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
 export interface DrugLabel {
   id: number;
   drug_id: number;
@@ -43,4 +59,55 @@ export interface SafetySummary {
   latency_ms: number;
   disclaimer: string;
   created_at: string;
+}
+
+export interface SafetyAlert {
+  id: number;
+  drug_id: number;
+  alert_type: "potential_safety_signal";
+  reaction: string;
+  baseline_count: number;
+  current_count: number;
+  percent_change: number;
+  message: string;
+  created_at: string;
+}
+
+export interface SignalResult {
+  id: number;
+  run_id: number;
+  drug_id: number;
+  reaction: string;
+  target_with_reaction: number;
+  target_without_reaction: number;
+  comparator_with_reaction: number;
+  comparator_without_reaction: number;
+  prr: number;
+  ror: number;
+  ror_ci_lower: number;
+  ror_ci_upper: number;
+  is_potential_signal: boolean;
+  explanation: string;
+  created_at: string;
+}
+
+export interface SignalAnalysisRun {
+  id: number;
+  drug_id: number;
+  status: "running" | "succeeded" | "failed";
+  source: string;
+  comparator_scope: string;
+  minimum_reports: number;
+  prr_threshold: number;
+  ror_ci_lower_threshold: number;
+  target_total_reports: number;
+  comparator_total_reports: number;
+  error_message: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface SignalAnalysis {
+  run: SignalAnalysisRun;
+  results: SignalResult[];
 }

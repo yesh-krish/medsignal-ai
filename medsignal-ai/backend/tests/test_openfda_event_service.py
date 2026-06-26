@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.adverse_event import AdverseEvent
+from app.models.ingestion_run import IngestionRun
 from app.services import openfda_event_service
 from app.services.openfda_event_service import (
     OpenFDATimeoutError,
@@ -14,6 +15,7 @@ from app.services.openfda_event_service import (
     build_reported_adverse_event_trends,
     extract_reported_adverse_events,
     fetch_and_save_reported_adverse_events,
+    fetch_reported_adverse_event_trends,
 )
 
 
@@ -35,8 +37,9 @@ class FakeResponse:
 
 
 class FakeClient:
-    def __init__(self, response=None, exception=None, timeout=None):
+    def __init__(self, response=None, responses=None, exception=None, timeout=None):
         self.response = response
+        self.responses = responses or []
         self.exception = exception
         self.timeout = timeout
 
@@ -49,6 +52,8 @@ class FakeClient:
     def get(self, url, params=None):
         if self.exception is not None:
             raise self.exception
+        if self.responses:
+            return self.responses.pop(0)
         return self.response
 
 
@@ -67,6 +72,7 @@ def db_session():
 def sample_openfda_event():
     return {
         "safetyreportid": "10000001",
+        "safetyreportversion": "2",
         "receivedate": "20240115",
         "serious": "1",
         "patient": {
@@ -108,7 +114,15 @@ def test_fetch_and_save_reported_adverse_events(monkeypatch, db_session):
     assert len(events) == 2
     assert events[0].reaction == "Nausea"
     assert events[0].drug_id == 1
+    assert events[0].safety_report_id == "10000001"
+    assert events[0].case_version == 2
+    assert events[0].reaction_index == 0
     assert events[0].raw_event_json["safetyreportid"] == "10000001"
+
+    run = db_session.query(IngestionRun).one()
+    assert run.status == "succeeded"
+    assert run.fetched_reports == 1
+    assert run.saved_reaction_rows == 2
 
 
 def test_fetch_and_save_reported_adverse_events_empty_results(monkeypatch, db_session):
@@ -162,6 +176,10 @@ def test_fetch_and_save_reported_adverse_events_timeout(monkeypatch, db_session)
 
     with pytest.raises(OpenFDATimeoutError):
         fetch_and_save_reported_adverse_events("Tylenol", 1, db_session)
+
+    run = db_session.query(IngestionRun).one()
+    assert run.status == "failed"
+    assert run.completed_at is not None
 
 
 def test_build_reported_adverse_event_trends():
@@ -231,3 +249,86 @@ def test_build_reported_adverse_event_trends_counts_unique_reports():
     assert trends["seriousness_breakdown"] == {"serious": 1}
     assert trends["sex_breakdown"] == {"female": 1}
     assert trends["total_reports"] == 1
+
+
+def test_fetch_reported_adverse_event_trends_uses_openfda_counts(monkeypatch):
+    responses = [
+        FakeResponse({"meta": {"results": {"total": 2}}, "results": [{}]}),
+        FakeResponse({"meta": {"results": {"total": 7}}, "results": [{}]}),
+        FakeResponse(
+            {
+                "results": [
+                    {"term": "NAUSEA", "count": 5},
+                    {"term": "HEADACHE", "count": 2},
+                ]
+            }
+        ),
+        FakeResponse(
+            {"results": [{"term": "1", "count": 3}, {"term": "2", "count": 4}]}
+        ),
+        FakeResponse(
+            {"results": [{"term": "2", "count": 5}, {"term": "1", "count": 2}]}
+        ),
+        FakeResponse({"meta": {"results": {"total": 7}}, "results": [{}]}),
+    ]
+    monkeypatch.setattr(
+        openfda_event_service.httpx,
+        "Client",
+        lambda timeout: FakeClient(responses=responses),
+    )
+
+    trends = fetch_reported_adverse_event_trends(
+        "Tylenol", start_year=2023, end_year=2024
+    )
+
+    assert trends["reports_by_year"] == {"2023": 2, "2024": 7}
+    assert trends["top_reported_reactions"] == [
+        {"reaction": "NAUSEA", "count": 5},
+        {"reaction": "HEADACHE", "count": 2},
+    ]
+    assert trends["seriousness_breakdown"] == {"serious": 3, "not_serious": 4}
+    assert trends["sex_breakdown"] == {"female": 5, "male": 2}
+    assert trends["total_reports"] == 7
+
+
+def test_query_openfda_paginated(monkeypatch):
+    responses = [
+        FakeResponse(
+            {
+                "meta": {"last_updated": "2026-06-01"},
+                "results": [
+                    {"safetyreportid": "1"},
+                    {"safetyreportid": "2"},
+                ],
+            }
+        ),
+        FakeResponse({"results": [{"safetyreportid": "3"}]}),
+    ]
+    monkeypatch.setattr(
+        openfda_event_service.httpx,
+        "Client",
+        lambda timeout: FakeClient(responses=responses),
+    )
+
+    results, source_last_updated = openfda_event_service._query_openfda_paginated(
+        "Tylenol", limit=3, page_size=2
+    )
+
+    assert [event["safetyreportid"] for event in results] == ["1", "2", "3"]
+    assert source_last_updated == "2026-06-01"
+
+
+def test_deduplicate_latest_case_versions():
+    events = [
+        {"safetyreportid": "1", "safetyreportversion": "1"},
+        {"safetyreportid": "1", "safetyreportversion": "3"},
+        {"safetyreportid": "2", "safetyreportversion": "1"},
+    ]
+
+    deduplicated, skipped = openfda_event_service._deduplicate_latest_case_versions(
+        events
+    )
+
+    assert skipped == 1
+    assert len(deduplicated) == 2
+    assert deduplicated[0]["safetyreportversion"] == "3"

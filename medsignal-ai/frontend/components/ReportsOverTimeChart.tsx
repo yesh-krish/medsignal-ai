@@ -49,8 +49,8 @@ export function ReportsOverTimeChart({
 
 function EmptyChartState() {
   return (
-    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
-      No report timeline loaded.
+    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 px-4 text-center text-sm leading-6 text-slate-500">
+      No yearly report trend is available yet.
     </div>
   );
 }

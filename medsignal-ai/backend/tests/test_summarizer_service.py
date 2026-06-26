@@ -81,7 +81,7 @@ def test_generate_and_save_safety_summary_rejects_empty_label():
 
 
 def test_clean_summary_removes_causal_wording():
-    cleaned = summarizer_service._clean_summary("This medication causes rash")
+    cleaned = summarizer_service._clean_summary("Generated text causes confusion")
 
     assert "causes" not in cleaned.lower()
     assert cleaned.endswith(".")

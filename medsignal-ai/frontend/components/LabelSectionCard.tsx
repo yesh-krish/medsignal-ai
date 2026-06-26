@@ -30,7 +30,9 @@ export function LabelSectionCard({
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-slate-500">No label section returned.</p>
+        <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+          This FDA label section was not returned for the selected medication.
+        </p>
       )}
     </article>
   );

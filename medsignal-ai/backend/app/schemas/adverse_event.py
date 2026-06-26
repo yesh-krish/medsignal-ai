@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict
 class AdverseEventRead(BaseModel):
     id: int
     drug_id: int
+    ingestion_run_id: int | None
+    safety_report_id: str | None
+    case_version: int | None
+    reaction_index: int | None
     reaction: str | None
     serious: bool
     outcome: str | None

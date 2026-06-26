@@ -7,11 +7,16 @@ from app.models.drug import Drug
 from app.schemas.adverse_event import AdverseEventRead, EventTrends
 from app.schemas.drug import DrugSearchResult
 from app.schemas.drug_label import DrugLabelRead
+from app.schemas.ingestion_run import IngestionRunRead
+from app.schemas.safety_alert import SafetyAlertRead
 from app.schemas.safety_summary import SafetySummaryRead
+from app.schemas.signal_analysis import SignalAnalysisResponse, SignalAnalysisRunRead
 from app.services import openfda_event_service
 from app.services import openfda_label_service
 from app.services import rxnorm_service
+from app.services import safety_signal_service
 from app.services import summarizer_service
+from app.services import signal_analysis_service
 
 router = APIRouter(prefix="/api/drugs", tags=["drugs"])
 
@@ -57,7 +62,7 @@ def get_drug(
 @router.get("/{drug_id}/events", response_model=list[AdverseEventRead])
 def get_reported_adverse_events(
     drug_id: int,
-    limit: int = Query(25, ge=1, le=100),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[AdverseEventRead]:
     drug = _get_drug_or_404(drug_id, db)
@@ -83,14 +88,120 @@ def get_reported_adverse_events(
         ) from exc
 
 
+@router.get(
+    "/{drug_id}/ingestion-runs/latest",
+    response_model=IngestionRunRead | None,
+)
+def get_latest_event_ingestion_run(
+    drug_id: int,
+    db: Session = Depends(get_db),
+) -> IngestionRunRead | None:
+    _get_drug_or_404(drug_id, db)
+    return openfda_event_service.get_latest_ingestion_run(drug_id, db)
+
+
 @router.get("/{drug_id}/event-trends", response_model=EventTrends)
 def get_reported_adverse_event_trends(
     drug_id: int,
     db: Session = Depends(get_db),
 ) -> EventTrends:
+    drug = _get_drug_or_404(drug_id, db)
+    if not drug.normalized_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Drug does not have a normalized name",
+        )
+
+    try:
+        return openfda_event_service.fetch_reported_adverse_event_trends(
+            drug.normalized_name
+        )
+    except openfda_event_service.OpenFDATimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="openFDA request timed out",
+        ) from exc
+    except openfda_event_service.OpenFDAUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="openFDA request failed",
+        ) from exc
+
+
+@router.get("/{drug_id}/alerts", response_model=list[SafetyAlertRead])
+def get_drug_safety_alerts(
+    drug_id: int,
+    db: Session = Depends(get_db),
+) -> list[SafetyAlertRead]:
     _get_drug_or_404(drug_id, db)
-    events = openfda_event_service.get_saved_reported_adverse_events(drug_id, db)
-    return openfda_event_service.build_reported_adverse_event_trends(events)
+    return safety_signal_service.get_safety_alerts(drug_id, db)
+
+
+@router.post("/{drug_id}/signals/analyze", response_model=SignalAnalysisResponse)
+def analyze_drug_signals(
+    drug_id: int,
+    reaction_limit: int = Query(10, ge=1, le=25),
+    minimum_reports: int = Query(3, ge=1, le=100),
+    prr_threshold: float = Query(2.0, gt=0),
+    ror_ci_lower_threshold: float = Query(1.0, gt=0),
+    db: Session = Depends(get_db),
+) -> SignalAnalysisResponse:
+    drug = _get_drug_or_404(drug_id, db)
+    if not drug.normalized_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Drug does not have a normalized name",
+        )
+    try:
+        run, results = signal_analysis_service.analyze_and_save_signals(
+            drug_id=drug.id,
+            normalized_drug_name=drug.normalized_name,
+            db=db,
+            reaction_limit=reaction_limit,
+            minimum_reports=minimum_reports,
+            prr_threshold=prr_threshold,
+            ror_ci_lower_threshold=ror_ci_lower_threshold,
+        )
+        return {"run": run, "results": results}
+    except openfda_event_service.OpenFDATimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="openFDA signal analysis timed out",
+        ) from exc
+    except openfda_event_service.OpenFDAUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="openFDA signal analysis failed",
+        ) from exc
+
+
+@router.get(
+    "/{drug_id}/signals/latest",
+    response_model=SignalAnalysisResponse | None,
+)
+def get_latest_drug_signal_analysis(
+    drug_id: int,
+    db: Session = Depends(get_db),
+) -> SignalAnalysisResponse | None:
+    _get_drug_or_404(drug_id, db)
+    analysis = signal_analysis_service.get_latest_signal_analysis(drug_id, db)
+    if analysis is None:
+        return None
+    run, results = analysis
+    return {"run": run, "results": results}
+
+
+@router.get(
+    "/{drug_id}/signals/history",
+    response_model=list[SignalAnalysisRunRead],
+)
+def get_drug_signal_analysis_history(
+    drug_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[SignalAnalysisRunRead]:
+    _get_drug_or_404(drug_id, db)
+    return signal_analysis_service.get_signal_analysis_history(drug_id, db, limit)
 
 
 @router.get("/{drug_id}/label", response_model=DrugLabelRead | None)

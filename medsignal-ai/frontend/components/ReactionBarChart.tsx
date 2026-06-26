@@ -58,8 +58,9 @@ export function ReactionBarChart({ data }: ReactionBarChartProps) {
 
 function EmptyChartState() {
   return (
-    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
-      No reported adverse events loaded.
+    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 px-4 text-center text-sm leading-6 text-slate-500">
+      No reported adverse events are loaded yet. Refresh data or try another
+      medication.
     </div>
   );
 }

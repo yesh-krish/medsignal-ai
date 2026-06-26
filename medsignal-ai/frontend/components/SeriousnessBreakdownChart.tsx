@@ -73,8 +73,8 @@ export function SeriousnessBreakdownChart({
 
 function EmptyChartState() {
   return (
-    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
-      No seriousness data loaded.
+    <div className="flex h-full items-center justify-center rounded-md bg-slate-50 px-4 text-center text-sm leading-6 text-slate-500">
+      No seriousness breakdown is available yet.
     </div>
   );
 }

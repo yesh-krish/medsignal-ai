@@ -9,6 +9,7 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models.adverse_event import AdverseEvent
 from app.models.drug import Drug
+from app.models.ingestion_run import IngestionRun
 from app.services import openfda_event_service
 from app.services.openfda_event_service import OpenFDATimeoutError, OpenFDAUpstreamError
 
@@ -127,43 +128,59 @@ def test_get_reported_adverse_events_openfda_timeout(monkeypatch):
     assert response.status_code == 504
 
 
-def test_get_reported_adverse_event_trends():
+def test_get_reported_adverse_event_trends(monkeypatch):
     drug_id = create_drug()
-    db = TestingSessionLocal()
-    db.add_all(
-        [
-            AdverseEvent(
-                drug_id=drug_id,
-                reaction="Nausea",
-                serious=True,
-                outcome="Recovered",
-                report_date=date(2024, 1, 15),
-                patient_age=45,
-                patient_sex="female",
-                raw_event_json={},
-            ),
-            AdverseEvent(
-                drug_id=drug_id,
-                reaction="Headache",
-                serious=False,
-                outcome=None,
-                report_date=date(2024, 1, 16),
-                patient_age=None,
-                patient_sex="unknown",
-                raw_event_json={},
-            ),
-        ]
+
+    def fake_fetch_trends(normalized_drug_name):
+        return {
+            "top_reported_reactions": [{"reaction": "Nausea", "count": 2}],
+            "reports_by_year": {"2014": 1, "2024": 2},
+            "seriousness_breakdown": {"serious": 1, "not_serious": 2},
+            "sex_breakdown": {"female": 2, "unknown": 1},
+            "total_reports": 3,
+        }
+
+    monkeypatch.setattr(
+        openfda_event_service,
+        "fetch_reported_adverse_event_trends",
+        fake_fetch_trends,
     )
-    db.commit()
-    db.close()
     client = TestClient(app)
 
     response = client.get(f"/api/drugs/{drug_id}/event-trends")
 
     assert response.status_code == 200
-    assert response.json()["total_reports"] == 2
-    assert response.json()["reports_by_year"] == {"2024": 2}
+    assert response.json()["total_reports"] == 3
+    assert response.json()["reports_by_year"] == {"2014": 1, "2024": 2}
     assert response.json()["seriousness_breakdown"] == {
         "serious": 1,
-        "not_serious": 1,
+        "not_serious": 2,
     }
+
+
+def test_get_latest_event_ingestion_run():
+    drug_id = create_drug()
+    db = TestingSessionLocal()
+    db.add(
+        IngestionRun(
+            drug_id=drug_id,
+            source="openFDA FAERS",
+            status="succeeded",
+            query='patient.drug.medicinalproduct:"Tylenol"',
+            requested_reports=100,
+            fetched_reports=100,
+            saved_reaction_rows=250,
+            duplicate_reports_skipped=4,
+            source_last_updated="2026-06-01",
+        )
+    )
+    db.commit()
+    db.close()
+    client = TestClient(app)
+
+    response = client.get(f"/api/drugs/{drug_id}/ingestion-runs/latest")
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "openFDA FAERS"
+    assert response.json()["fetched_reports"] == 100
+    assert response.json()["duplicate_reports_skipped"] == 4

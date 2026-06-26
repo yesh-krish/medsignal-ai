@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: medsignal
-      POSTGRES_PASSWORD: medsignal
-      POSTGRES_DB: medsignal
+      POSTGRES_USER: ${POSTGRES_USER:-medsignal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medsignal}
+      POSTGRES_DB: ${POSTGRES_DB:-medsignal}
     ports:
       - "5432:5432"
     volumes:
@@ -19,15 +19,19 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg2://medsignal:medsignal@postgres:5432/medsignal
-      ENVIRONMENT: local
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      MLFLOW_EXPERIMENT_NAME: medsignal-label-summarization
-      SUMMARIZER_MODEL_NAME: sshleifer/distilbart-cnn-6-6
-      SUMMARIZER_TASK: summarization
-      SUMMARIZER_MAX_INPUT_CHARS: 4000
-      SUMMARIZER_MAX_NEW_TOKENS: 180
-      SUMMARIZER_MIN_NEW_TOKENS: 60
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg2://medsignal:medsignal@postgres:5432/medsignal}
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      RXNORM_BASE_URL: ${RXNORM_BASE_URL:-https://rxnav.nlm.nih.gov}
+      RXNORM_TIMEOUT_SECONDS: ${RXNORM_TIMEOUT_SECONDS:-5}
+      OPENFDA_BASE_URL: ${OPENFDA_BASE_URL:-https://api.fda.gov}
+      OPENFDA_TIMEOUT_SECONDS: ${OPENFDA_TIMEOUT_SECONDS:-10}
+      MLFLOW_TRACKING_URI: ${DOCKER_MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-medsignal-label-summarization}
+      SUMMARIZER_MODEL_NAME: ${SUMMARIZER_MODEL_NAME:-sshleifer/distilbart-cnn-6-6}
+      SUMMARIZER_TASK: ${SUMMARIZER_TASK:-summarization}
+      SUMMARIZER_MAX_INPUT_CHARS: ${SUMMARIZER_MAX_INPUT_CHARS:-4000}
+      SUMMARIZER_MAX_NEW_TOKENS: ${SUMMARIZER_MAX_NEW_TOKENS:-180}
+      SUMMARIZER_MIN_NEW_TOKENS: ${SUMMARIZER_MIN_NEW_TOKENS:-60}
     ports:
       - "8000:8000"
     volumes:
@@ -60,7 +64,7 @@ services:
     build:
       context: ./frontend
     environment:
-      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     volumes:
