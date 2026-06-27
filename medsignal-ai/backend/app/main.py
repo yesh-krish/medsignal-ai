@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.drugs import router as drugs_router
 from app.api.health import router as health_router
+from app.api.medication_lists import router as medication_lists_router
 
 app = FastAPI(title="MedSignal AI API")
 
@@ -16,3 +17,4 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(drugs_router)
+app.include_router(medication_lists_router)

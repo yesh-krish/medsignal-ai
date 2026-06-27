@@ -167,3 +167,19 @@ export interface DrugComparison {
   label_section_comparison: LabelSectionComparison[];
   disclaimer: string;
 }
+
+export interface MedicationListItem {
+  id: number;
+  medication_list_id: number;
+  drug_id: number;
+  drug: Drug;
+  created_at: string;
+}
+
+export interface MedicationList {
+  id: number;
+  name: string;
+  items: MedicationListItem[];
+  created_at: string;
+  updated_at: string;
+}

@@ -357,6 +357,12 @@ export default function DrugDashboard({ params }: PageProps) {
             >
               Compare medications
             </Link>
+            <Link
+              href="/medsignal-ai/cabinet"
+              className="ml-4 text-sm font-medium text-slate-600 transition hover:text-slate-950"
+            >
+              Medication cabinet
+            </Link>
             <p className="mt-5 text-sm font-medium uppercase text-teal-700">
               Medication safety dashboard
             </p>

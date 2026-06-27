@@ -99,6 +99,26 @@ export default function MedSignalHome() {
           </div>
         </div>
 
+        <div className="mt-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">
+                Build a medication cabinet
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Add multiple RxNorm-normalized medications before screening for
+                potential drug-drug interactions in the next phase.
+              </p>
+            </div>
+            <Link
+              href="/medsignal-ai/cabinet"
+              className="inline-flex h-11 items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800"
+            >
+              Open cabinet
+            </Link>
+          </div>
+        </div>
+
         <p className="mt-8 max-w-3xl text-sm leading-6 text-slate-500">
           Educational use only. Reported adverse events do not establish that a
           medication caused an event and are not medical advice.
