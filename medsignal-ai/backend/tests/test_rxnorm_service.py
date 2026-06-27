@@ -121,6 +121,28 @@ def test_search_and_save_drug_updates_existing_drug(monkeypatch, db_session):
     assert drug.normalized_name == "Tylenol"
 
 
+def test_search_and_save_drug_uses_cached_match(monkeypatch, db_session):
+    existing_drug = Drug(
+        rxcui="202433",
+        input_name="Tylenol",
+        normalized_name="Tylenol",
+        synonym="acetaminophen",
+        tty="BN",
+    )
+    db_session.add(existing_drug)
+    db_session.commit()
+
+    def fail_if_rxnorm_called(timeout):
+        raise AssertionError("RxNorm should not be called for cached drug search")
+
+    monkeypatch.setattr(rxnorm_service.httpx, "Client", fail_if_rxnorm_called)
+
+    drug = search_and_save_drug("tylenol", db_session)
+
+    assert drug.id == existing_drug.id
+    assert drug.normalized_name == "Tylenol"
+
+
 def test_search_and_save_drug_raises_not_found(monkeypatch, db_session):
     responses = [FakeResponse({"idGroup": {}})]
     monkeypatch.setattr(rxnorm_service.httpx, "Client", lambda timeout: FakeClient(responses))

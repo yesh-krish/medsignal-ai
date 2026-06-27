@@ -167,3 +167,56 @@ export interface DrugComparison {
   label_section_comparison: LabelSectionComparison[];
   disclaimer: string;
 }
+
+export interface MedicationListItem {
+  id: number;
+  medication_list_id: number;
+  drug_id: number;
+  drug: Drug;
+  created_at: string;
+}
+
+export interface MedicationList {
+  id: number;
+  name: string;
+  items: MedicationListItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InteractionDrug {
+  rxcui: string;
+  name: string;
+}
+
+export interface InteractionEvidence {
+  source_drug_name: string;
+  source_rxcui: string;
+  matched_drug_name: string | null;
+  matched_rxcui: string | null;
+  matched_term: string | null;
+  match_type: string;
+  label_section: string;
+  risk_statement: string | null;
+  excerpt: string;
+}
+
+export interface PotentialInteraction {
+  source: string;
+  severity: string | null;
+  severity_tier: string | null;
+  mechanism: string | null;
+  risk_category: string | null;
+  description: string;
+  drugs: InteractionDrug[];
+  explanation: string | null;
+  assessment_reason: string | null;
+  evidence: InteractionEvidence[] | null;
+}
+
+export interface InteractionScreening {
+  medication_list_id: number;
+  checked_rxcuis: string[];
+  interactions: PotentialInteraction[];
+  disclaimer: string;
+}

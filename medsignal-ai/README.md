@@ -17,6 +17,7 @@ to explore quickly. MedSignal AI brings several signals into one local dashboard
 - RxNorm drug normalization
 - openFDA reported adverse events
 - openFDA drug label sections
+- medication cabinet with openFDA label-backed potential interaction screening
 - AI-generated label summaries
 - MLflow experiment tracking
 - Prefect refresh and signal detection flows
@@ -51,6 +52,7 @@ FastAPI backend :8000
   |-- RxNorm API
   |-- openFDA adverse event API
   |-- openFDA drug label API
+  |-- openFDA label drug_interactions screening
   |-- Hugging Face summarizer
   |-- MLflow tracking server :5000
   |
@@ -116,6 +118,10 @@ POST /api/drugs/{drug_id}/signals/analyze
 GET  /api/drugs/{drug_id}/signals/latest
 GET  /api/drugs/{drug_id}/signals/history
 GET  /api/drugs/{drug_id}/signals/timeline
+GET  /api/medication-lists/default
+POST /api/medication-lists/default/items
+DELETE /api/medication-lists/default/items/{item_id}
+GET  /api/medication-lists/default/interactions
 ```
 
 Key behavior:
@@ -133,6 +139,10 @@ Key behavior:
   that report counts cannot establish which medication is safer.
 - Signal timeline route tracks new, continuing, resolved, and below-threshold
   PRR/ROR results across saved analysis runs.
+- Medication cabinet routes let users maintain a local list of RxNorm-normalized
+  medications and screen FDA label `drug_interactions` text for potential
+  interaction guidance to discuss with a clinician or pharmacist. This replaced
+  the retired RxNav interaction API and avoids hardcoded interaction rules.
 
 ## MLflow Usage
 
@@ -224,6 +234,7 @@ Add screenshots here when preparing the portfolio submission:
 - AI safety summary card
 - Explainable PRR/ROR signal cards and timeline
 - Two-medication comparison
+- Medication cabinet with potential interaction screening
 - MLflow experiment run
 
 ## Environment Variables
