@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import type { Drug, MedicationList } from "@/lib/api-types";
+import type { Drug, InteractionScreening, MedicationList } from "@/lib/api-types";
 
 export default function MedicationCabinetPage() {
   const backendUrl =
@@ -11,10 +11,14 @@ export default function MedicationCabinetPage() {
   const [medicationList, setMedicationList] = useState<MedicationList | null>(null);
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState<Drug | null>(null);
+  const [interactionScreening, setInteractionScreening] =
+    useState<InteractionScreening | null>(null);
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isScreeningInteractions, setIsScreeningInteractions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadMedicationList() {
@@ -90,6 +94,7 @@ export default function MedicationCabinetPage() {
       }
       setMedicationList((await response.json()) as MedicationList);
       setSearchResult(null);
+      setInteractionScreening(null);
       setQuery("");
     } catch (caughtError) {
       setError(
@@ -114,6 +119,7 @@ export default function MedicationCabinetPage() {
         throw new Error("Medication could not be removed.");
       }
       setMedicationList((await response.json()) as MedicationList);
+      setInteractionScreening(null);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -125,7 +131,36 @@ export default function MedicationCabinetPage() {
     }
   }
 
+  async function handleScreenInteractions() {
+    setIsScreeningInteractions(true);
+    setInteractionError(null);
+    try {
+      const response = await fetch(
+        `${backendUrl}/api/medication-lists/default/interactions`,
+      );
+      if (response.status === 504) {
+        throw new Error(
+          "openFDA label interaction screening timed out. Try again shortly.",
+        );
+      }
+      if (!response.ok) {
+        throw new Error("Potential interaction screening could not be completed.");
+      }
+      setInteractionScreening((await response.json()) as InteractionScreening);
+    } catch (caughtError) {
+      setInteractionError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Potential interaction screening failed.",
+      );
+    } finally {
+      setIsScreeningInteractions(false);
+    }
+  }
+
   const hasItems = (medicationList?.items.length ?? 0) > 0;
+  const formatAssessmentValue = (value: string | null) =>
+    value ? value.replaceAll("_", " ") : "Not classified";
 
   return (
     <main className="min-h-screen bg-[#f7faf9] px-6 py-6 text-slate-950">
@@ -150,8 +185,9 @@ export default function MedicationCabinetPage() {
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
             Add RxNorm-normalized medications to prepare for potential
-            drug-drug interaction screening. This is an educational preparation
-            tool and does not replace a clinician or pharmacist review.
+            drug-drug interaction screening from FDA label text. This is an
+            educational preparation tool and does not replace a clinician or
+            pharmacist review.
           </p>
         </header>
 
@@ -191,7 +227,7 @@ export default function MedicationCabinetPage() {
                   {searchResult.normalized_name ?? searchResult.input_name}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  RxCUI {searchResult.rxcui ?? "unknown"} · TTY{" "}
+                  RxCUI {searchResult.rxcui ?? "unknown"} / TTY{" "}
                   {searchResult.tty ?? "unknown"}
                 </p>
                 <button
@@ -258,7 +294,7 @@ export default function MedicationCabinetPage() {
                         {item.drug.normalized_name ?? item.drug.input_name}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                        RxCUI {item.drug.rxcui ?? "unknown"} ·{" "}
+                        RxCUI {item.drug.rxcui ?? "unknown"} /{" "}
                         {item.drug.synonym ?? "No synonym returned"}
                       </p>
                     </div>
@@ -285,10 +321,175 @@ export default function MedicationCabinetPage() {
           </article>
         </section>
 
+        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase text-teal-700">
+                Interaction screening
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-950">
+                Potential drug-drug interactions
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Screen the current cabinet against openFDA label
+                drug_interactions text. Matched cards include FDA label evidence
+                to discuss with a clinician or pharmacist.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleScreenInteractions}
+              disabled={
+                isScreeningInteractions ||
+                isSaving ||
+                (medicationList?.items.length ?? 0) < 2
+              }
+              className="h-11 shrink-0 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {isScreeningInteractions
+                ? "Screening"
+                : "Screen potential interactions"}
+            </button>
+          </div>
+
+          {(medicationList?.items.length ?? 0) < 2 && (
+            <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+              Add at least two medications to screen for potential interactions.
+            </p>
+          )}
+
+          {interactionError && (
+            <p className="mt-4 rounded-md bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+              {interactionError}
+            </p>
+          )}
+
+          {interactionScreening && (
+            <div className="mt-5">
+              {interactionScreening.interactions.length === 0 ? (
+                <p className="rounded-md bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+                  openFDA labels did not return drug_interactions text for the
+                  checked medications. This does not rule out a clinically
+                  important interaction.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {interactionScreening.interactions.map((interaction, index) => (
+                    <article
+                      key={`${interaction.description}-${index}`}
+                      className="rounded-md border border-amber-200 bg-amber-50 p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <h3 className="text-sm font-semibold text-amber-950">
+                          {interaction.drugs.map((drug) => drug.name).join(" + ")}
+                        </h3>
+                        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                          {interaction.severity ?? "Severity not specified"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-amber-950">
+                        {interaction.description}
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold uppercase text-amber-800">
+                            Mechanism
+                          </p>
+                          <p className="mt-1 text-sm font-semibold capitalize text-slate-950">
+                            {formatAssessmentValue(interaction.mechanism)}
+                          </p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold uppercase text-amber-800">
+                            Risk category
+                          </p>
+                          <p className="mt-1 text-sm font-semibold capitalize text-slate-950">
+                            {formatAssessmentValue(interaction.risk_category)}
+                          </p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold uppercase text-amber-800">
+                            Severity tier
+                          </p>
+                          <p className="mt-1 text-sm font-semibold capitalize text-slate-950">
+                            {formatAssessmentValue(interaction.severity_tier)}
+                          </p>
+                        </div>
+                      </div>
+                      {interaction.explanation && (
+                        <p className="mt-2 text-sm leading-6 text-amber-900">
+                          {interaction.explanation}
+                        </p>
+                      )}
+                      {interaction.assessment_reason && (
+                        <p className="mt-2 rounded-md bg-white px-3 py-2 text-sm leading-6 text-slate-700">
+                          {interaction.assessment_reason}
+                        </p>
+                      )}
+                      {interaction.evidence && interaction.evidence.length > 0 && (
+                        <div className="mt-3 rounded-md border border-amber-200 bg-white p-3">
+                          <p className="text-xs font-semibold uppercase text-amber-800">
+                            FDA label evidence
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {interaction.evidence.map((evidence, excerptIndex) => (
+                              <div
+                                key={`${evidence.source_rxcui}-${evidence.excerpt}-${excerptIndex}`}
+                                className="rounded-md bg-slate-50 p-3"
+                              >
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="text-sm font-semibold text-slate-950">
+                                    From {evidence.source_drug_name} label
+                                  </p>
+                                  <span className="w-fit rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                    {evidence.match_type}
+                                  </span>
+                                </div>
+                                {evidence.matched_drug_name && evidence.matched_term && (
+                                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                                    Matched to {evidence.matched_drug_name} using{" "}
+                                    <span className="font-semibold text-slate-700">
+                                      {evidence.matched_term}
+                                    </span>{" "}
+                                    in {evidence.label_section}.
+                                  </p>
+                                )}
+                                {evidence.risk_statement && (
+                                  <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2">
+                                    <p className="text-xs font-semibold uppercase text-rose-800">
+                                      Potential concern described in FDA label
+                                    </p>
+                                    <p className="mt-1 text-sm leading-6 text-rose-950">
+                                      {evidence.risk_statement}
+                                    </p>
+                                  </div>
+                                )}
+                                <p className="mt-2 text-sm leading-6 text-slate-700">
+                                  {evidence.excerpt}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="mt-3 text-xs font-medium uppercase text-amber-800">
+                        Source: {interaction.source}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+                {interactionScreening.disclaimer}
+              </p>
+            </div>
+          )}
+        </section>
+
         <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950 shadow-sm">
           This cabinet is for education and appointment preparation. It does not
-          detect interactions yet, and it should not be used to start, stop, or
-          change prescribed medication without medical advice.
+          replace professional medication review, and it should not be used to
+          start, stop, or change prescribed medication without medical advice.
         </section>
       </div>
     </main>

@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.models.drug import Drug
 from app.models.medication_list import MedicationList, MedicationListItem
+from app.schemas.interaction import InteractionScreeningResponse
 from app.schemas.medication_list import MedicationListItemCreate, MedicationListRead
+from app.services import interaction_service
 
 router = APIRouter(prefix="/api/medication-lists", tags=["medication lists"])
 
@@ -70,6 +72,30 @@ def remove_default_medication_list_item(
     db.delete(list_item)
     db.commit()
     return _load_list(medication_list.id, db)
+
+
+@router.get(
+    "/default/interactions",
+    response_model=InteractionScreeningResponse,
+)
+def screen_default_medication_list_interactions(
+    db: Session = Depends(get_db),
+) -> InteractionScreeningResponse:
+    medication_list = _get_or_create_default_list(db)
+    try:
+        return interaction_service.screen_medication_list_interactions(
+            medication_list
+        )
+    except interaction_service.InteractionTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="openFDA label interaction request timed out",
+        ) from exc
+    except interaction_service.InteractionUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="openFDA label interaction request failed",
+        ) from exc
 
 
 def _get_or_create_default_list(db: Session) -> MedicationList:

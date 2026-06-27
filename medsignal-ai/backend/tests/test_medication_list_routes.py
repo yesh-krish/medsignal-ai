@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db
 from app.main import app
 from app.models.drug import Drug
+from app.services import interaction_service
 
 
 engine = create_engine(
@@ -109,3 +110,27 @@ def test_add_medication_list_item_rejects_unknown_drug():
     )
 
     assert response.status_code == 404
+
+
+def test_screen_default_medication_list_interactions(monkeypatch):
+    drug_id = create_drug()
+    client = TestClient(app)
+    client.post("/api/medication-lists/default/items", json={"drug_id": drug_id})
+
+    def fake_screen(medication_list):
+        return {
+            "medication_list_id": medication_list.id,
+            "checked_rxcuis": ["202433"],
+            "interactions": [],
+            "disclaimer": "Ask a doctor or pharmacist.",
+        }
+
+    monkeypatch.setattr(
+        interaction_service, "screen_medication_list_interactions", fake_screen
+    )
+
+    response = client.get("/api/medication-lists/default/interactions")
+
+    assert response.status_code == 200
+    assert response.json()["checked_rxcuis"] == ["202433"]
+    assert "pharmacist" in response.json()["disclaimer"]
