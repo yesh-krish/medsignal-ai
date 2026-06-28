@@ -101,6 +101,19 @@ def test_screen_medication_list_interactions_matches_openfda_label_text(
     assert interaction["mechanism"] == "pharmacodynamic"
     assert interaction["risk_category"] == "severe_gastrointestinal_hemorrhage"
     assert "Pharmacodynamic risk takes priority" in interaction["assessment_reason"]
+    assert {item["drug_name"] for item in interaction["detected_classes"]} == {
+        "warfarin",
+        "ibuprofen",
+    }
+    assert any(
+        item["drug_name"] == "warfarin" and "anticoagulant" in item["classes"]
+        for item in interaction["detected_classes"]
+    )
+    assert any(
+        item["drug_name"] == "ibuprofen" and "nsaid" in item["classes"]
+        for item in interaction["detected_classes"]
+    )
+    assert any("Applied hierarchy rule" in step for step in interaction["reasoning_steps"])
     assert "FDA label drug interaction guidance was found" in interaction["description"]
     assert "RxClass terminology" in interaction["explanation"]
     assert "anti-inflammatory" in interaction["evidence"][0]["excerpt"]
@@ -159,6 +172,7 @@ def test_screen_medication_list_interactions_returns_label_guidance_without_pair
     interaction = result["interactions"][0]
     assert interaction["mechanism"] == "unknown"
     assert interaction["severity_tier"] == "tier_3_moderate_adjust"
+    assert interaction["reasoning_steps"]
     assert interaction["drugs"] == [{"rxcui": "11289", "name": "warfarin"}]
     assert "did not explicitly name another medication" in interaction["description"]
     assert interaction["evidence"][0]["match_type"] == "general label guidance"
@@ -234,6 +248,9 @@ def test_screen_medication_list_interactions_merges_bidirectional_pair_evidence(
     assert interaction["severity_tier"] == "tier_1_contraindicated_critical"
     assert interaction["mechanism"] == "pharmacodynamic"
     assert interaction["risk_category"] == "cns_respiratory_depression"
+    assert any(
+        "opioid + benzodiazepine" in step for step in interaction["reasoning_steps"]
+    )
     assert {drug["name"] for drug in interaction["drugs"]} == {
         "hydrocodone",
         "alprazolam",

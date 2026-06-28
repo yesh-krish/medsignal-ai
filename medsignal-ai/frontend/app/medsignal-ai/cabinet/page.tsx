@@ -426,6 +426,52 @@ export default function MedicationCabinetPage() {
                           {interaction.assessment_reason}
                         </p>
                       )}
+                      {((interaction.detected_classes?.length ?? 0) > 0 ||
+                        (interaction.reasoning_steps?.length ?? 0) > 0) && (
+                        <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                          <p className="text-xs font-semibold uppercase text-slate-600">
+                            Why this was flagged
+                          </p>
+                          {interaction.detected_classes &&
+                            interaction.detected_classes.length > 0 && (
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {interaction.detected_classes.map((detectedClass) => (
+                                  <div
+                                    key={`${detectedClass.rxcui}-${detectedClass.drug_name}`}
+                                    className="rounded-md bg-slate-50 px-3 py-2"
+                                  >
+                                    <p className="text-sm font-semibold text-slate-950">
+                                      {detectedClass.drug_name}
+                                    </p>
+                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                      {detectedClass.classes.length > 0
+                                        ? detectedClass.classes
+                                            .map(formatAssessmentValue)
+                                            .join(", ")
+                                        : "No class category detected"}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          {interaction.reasoning_steps &&
+                            interaction.reasoning_steps.length > 0 && (
+                              <ol className="mt-3 space-y-2">
+                                {interaction.reasoning_steps.map((step, stepIndex) => (
+                                  <li
+                                    key={`${step}-${stepIndex}`}
+                                    className="flex gap-3 text-sm leading-6 text-slate-700"
+                                  >
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white">
+                                      {stepIndex + 1}
+                                    </span>
+                                    <span>{step}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                        </div>
+                      )}
                       {interaction.evidence && interaction.evidence.length > 0 && (
                         <div className="mt-3 rounded-md border border-amber-200 bg-white p-3">
                           <p className="text-xs font-semibold uppercase text-amber-800">

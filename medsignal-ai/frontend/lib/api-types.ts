@@ -189,6 +189,12 @@ export interface InteractionDrug {
   name: string;
 }
 
+export interface InteractionDetectedClass {
+  drug_name: string;
+  rxcui: string;
+  classes: string[];
+}
+
 export interface InteractionEvidence {
   source_drug_name: string;
   source_rxcui: string;
@@ -211,6 +217,8 @@ export interface PotentialInteraction {
   drugs: InteractionDrug[];
   explanation: string | null;
   assessment_reason: string | null;
+  detected_classes: InteractionDetectedClass[] | null;
+  reasoning_steps: string[] | null;
   evidence: InteractionEvidence[] | null;
 }
 
