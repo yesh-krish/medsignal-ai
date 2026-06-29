@@ -286,6 +286,8 @@ def _add_pair_interaction(
                 "FDA evidence is added."
             ),
             "drugs": drugs,
+            "detected_classes": _detected_classes([source_item, target_item]),
+            "reasoning_steps": [],
             "evidence": [],
         },
     )
@@ -327,6 +329,12 @@ def _add_label_guidance_interaction(
             "or medication match."
         ),
         "drugs": [{"rxcui": source_item["rxcui"], "name": source_item["name"]}],
+        "detected_classes": _detected_classes([source_item]),
+        "reasoning_steps": [
+            f"Retrieved FDA label interaction text for {source_item['name']}.",
+            "No medication-name or class-pair match was found against another medication in the cabinet.",
+            "Assigned Tier 3 because this is general label guidance rather than a pair-specific DDI assessment.",
+        ],
         "evidence": [
             _evidence(
                 source_item=source_item,
@@ -379,7 +387,17 @@ def _apply_interaction_assessment(
 
     hierarchy = _hierarchy_assessment(categories)
     if hierarchy is not None:
+        hierarchy_rule = hierarchy.pop("hierarchy_rule")
         interaction.update(hierarchy)
+        interaction["detected_classes"] = _detected_classes(items)
+        interaction["reasoning_steps"] = _reasoning_steps(
+            items=items,
+            mechanism=interaction["mechanism"],
+            risk_category=interaction["risk_category"],
+            severity_tier=interaction["severity_tier"],
+            hierarchy_reason=hierarchy_rule,
+            evidence=interaction["evidence"],
+        )
         return
 
     has_pk = any(term in evidence_text for term in PK_TERMS)
@@ -404,6 +422,15 @@ def _apply_interaction_assessment(
             "assessment_reason": _assessment_reason(
                 mechanism, risk_category, severity_tier
             ),
+            "detected_classes": _detected_classes(items),
+            "reasoning_steps": _reasoning_steps(
+                items=items,
+                mechanism=mechanism,
+                risk_category=risk_category,
+                severity_tier=severity_tier,
+                hierarchy_reason=None,
+                evidence=interaction["evidence"],
+            ),
         }
     )
 
@@ -420,6 +447,7 @@ def _hierarchy_assessment(categories: set[str]) -> dict[str, str] | None:
                 "anticoagulation create a critical bleeding-risk pattern. "
                 "Pharmacodynamic risk takes priority over CYP table matches."
             ),
+            "hierarchy_rule": "NSAID + anticoagulant",
         }
     if {"opioid", "benzodiazepine"}.issubset(categories):
         return {
@@ -431,6 +459,7 @@ def _hierarchy_assessment(categories: set[str]) -> dict[str, str] | None:
                 "Hierarchy override: opioid plus benzodiazepine creates "
                 "overlapping CNS and respiratory-depression risk."
             ),
+            "hierarchy_rule": "opioid + benzodiazepine",
         }
     if {"antiplatelet", "anticoagulant"}.issubset(categories):
         return {
@@ -442,6 +471,7 @@ def _hierarchy_assessment(categories: set[str]) -> dict[str, str] | None:
                 "Hierarchy override: antiplatelet effect plus anticoagulation "
                 "creates an additive bleeding-risk pattern."
             ),
+            "hierarchy_rule": "antiplatelet + anticoagulant",
         }
     return None
 
@@ -494,6 +524,62 @@ def _assessment_reason(
         f"Classified as {mechanism} with {risk_category} risk using FDA label "
         f"evidence and assigned {severity_tier.replace('_', ' ')}."
     )
+
+
+def _detected_classes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "drug_name": item["name"],
+            "rxcui": item["rxcui"],
+            "classes": sorted(item["categories"]),
+        }
+        for item in sorted(items, key=lambda value: value["name"].casefold())
+    ]
+
+
+def _reasoning_steps(
+    items: list[dict[str, Any]],
+    mechanism: str,
+    risk_category: str,
+    severity_tier: str,
+    hierarchy_reason: str | None,
+    evidence: list[dict[str, Any]],
+) -> list[str]:
+    names = " + ".join(
+        item["name"] for item in sorted(items, key=lambda value: value["name"].casefold())
+    )
+    classes = [
+        f"{item['name']}: {', '.join(sorted(item['categories'])) or 'no class category detected'}"
+        for item in sorted(items, key=lambda value: value["name"].casefold())
+    ]
+    label_sections = sorted(
+        {
+            str(item.get("label_section"))
+            for item in evidence
+            if item.get("label_section")
+        }
+    )
+    matched_terms = sorted(
+        {str(item.get("matched_term")) for item in evidence if item.get("matched_term")}
+    )
+    steps = [
+        f"Screened the medication pair: {names}.",
+        f"Detected drug classes: {'; '.join(classes)}.",
+        f"Matched FDA label evidence from: {', '.join(label_sections) or 'no label section recorded'}.",
+    ]
+    if matched_terms:
+        steps.append(f"Matched class or medication terms: {', '.join(matched_terms)}.")
+    if hierarchy_reason:
+        steps.append(
+            f"Applied hierarchy rule: {hierarchy_reason}. This pharmacodynamic rule takes priority over CYP/PK table matches."
+        )
+    else:
+        steps.append(
+            f"Classified mechanism as {mechanism} from FDA label wording and matched terms."
+        )
+    steps.append(f"Assigned risk category: {risk_category}.")
+    steps.append(f"Assigned severity tier: {severity_tier.replace('_', ' ')}.")
+    return steps
 
 
 def _query_openfda_labels(source_item: dict[str, Any]) -> list[dict[str, Any]]:

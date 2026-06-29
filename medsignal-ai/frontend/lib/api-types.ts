@@ -184,9 +184,42 @@ export interface MedicationList {
   updated_at: string;
 }
 
+export interface MedicationRiskFactor {
+  factor_key: string;
+  label: string;
+  help_text: string;
+  input_type: "checkbox" | "text";
+  is_present: boolean;
+  note: string | null;
+}
+
+export interface MedicationRiskDiscussionItem {
+  factor_key: string;
+  label: string;
+  concern: string;
+  connected_categories: string[];
+  matched_medications: string[];
+}
+
+export interface MedicationRiskProfile {
+  id: number;
+  medication_list_id: number;
+  factors: MedicationRiskFactor[];
+  factors_to_discuss: MedicationRiskDiscussionItem[];
+  disclaimer: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InteractionDrug {
   rxcui: string;
   name: string;
+}
+
+export interface InteractionDetectedClass {
+  drug_name: string;
+  rxcui: string;
+  classes: string[];
 }
 
 export interface InteractionEvidence {
@@ -211,6 +244,8 @@ export interface PotentialInteraction {
   drugs: InteractionDrug[];
   explanation: string | null;
   assessment_reason: string | null;
+  detected_classes: InteractionDetectedClass[] | null;
+  reasoning_steps: string[] | null;
   evidence: InteractionEvidence[] | null;
 }
 

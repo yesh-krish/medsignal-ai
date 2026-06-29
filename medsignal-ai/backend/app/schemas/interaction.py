@@ -6,6 +6,12 @@ class InteractionDrugRead(BaseModel):
     name: str
 
 
+class InteractionDetectedClassRead(BaseModel):
+    drug_name: str
+    rxcui: str
+    classes: list[str]
+
+
 class InteractionEvidenceRead(BaseModel):
     source_drug_name: str
     source_rxcui: str
@@ -28,6 +34,8 @@ class PotentialInteractionRead(BaseModel):
     drugs: list[InteractionDrugRead]
     explanation: str | None = None
     assessment_reason: str | None = None
+    detected_classes: list[InteractionDetectedClassRead] | None = None
+    reasoning_steps: list[str] | None = None
     evidence: list[InteractionEvidenceRead] | None = None
 
 

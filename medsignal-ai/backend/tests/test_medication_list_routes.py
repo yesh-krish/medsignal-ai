@@ -35,13 +35,17 @@ def teardown_function():
     app.dependency_overrides.clear()
 
 
-def create_drug(name: str = "Tylenol") -> int:
+def create_drug(
+    name: str = "Tylenol",
+    rxcui: str = "202433",
+    synonym: str = "acetaminophen",
+) -> int:
     db = TestingSessionLocal()
     drug = Drug(
-        rxcui="202433",
+        rxcui=rxcui,
         input_name=name,
         normalized_name=name,
-        synonym="acetaminophen",
+        synonym=synonym,
         tty="BN",
     )
     db.add(drug)
@@ -134,3 +138,54 @@ def test_screen_default_medication_list_interactions(monkeypatch):
     assert response.status_code == 200
     assert response.json()["checked_rxcuis"] == ["202433"]
     assert "pharmacist" in response.json()["disclaimer"]
+
+
+def test_get_default_medication_risk_profile_creates_empty_profile():
+    client = TestClient(app)
+
+    response = client.get("/api/medication-lists/default/risk-profile")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["medication_list_id"] == 1
+    assert len(body["factors"]) == 12
+    assert body["factors_to_discuss"] == []
+    assert "does not diagnose" in body["disclaimer"]
+
+
+def test_save_and_load_default_medication_risk_profile():
+    create_drug(name="ibuprofen", synonym="nonsteroidal anti-inflammatory")
+    client = TestClient(app)
+    search_response = client.get("/api/medication-lists/default")
+    assert search_response.status_code == 200
+
+    response = client.put(
+        "/api/medication-lists/default/risk-profile",
+        json={
+            "factors": [
+                {"factor_key": "kidney_disease", "is_present": True},
+                {
+                    "factor_key": "allergies",
+                    "is_present": False,
+                    "note": "Penicillin",
+                },
+                {"factor_key": "unknown_factor", "is_present": True},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    saved_factors = {factor["factor_key"]: factor for factor in body["factors"]}
+    assert saved_factors["kidney_disease"]["is_present"] is True
+    assert saved_factors["allergies"]["note"] == "Penicillin"
+    assert "unknown_factor" not in saved_factors
+
+    loaded_response = client.get("/api/medication-lists/default/risk-profile")
+
+    assert loaded_response.status_code == 200
+    loaded_factors = {
+        factor["factor_key"]: factor for factor in loaded_response.json()["factors"]
+    }
+    assert loaded_factors["kidney_disease"]["is_present"] is True
+    assert loaded_factors["allergies"]["note"] == "Penicillin"
