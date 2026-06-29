@@ -1,14 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import type { Drug, InteractionScreening, MedicationList } from "@/lib/api-types";
+import type {
+  Drug,
+  InteractionScreening,
+  MedicationList,
+  MedicationRiskFactor,
+  MedicationRiskProfile,
+} from "@/lib/api-types";
 
 export default function MedicationCabinetPage() {
   const backendUrl =
     process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
   const [medicationList, setMedicationList] = useState<MedicationList | null>(null);
+  const [riskProfile, setRiskProfile] = useState<MedicationRiskProfile | null>(null);
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState<Drug | null>(null);
   const [interactionScreening, setInteractionScreening] =
@@ -16,9 +23,30 @@ export default function MedicationCabinetPage() {
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingRiskProfile, setIsSavingRiskProfile] = useState(false);
   const [isScreeningInteractions, setIsScreeningInteractions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [riskProfileError, setRiskProfileError] = useState<string | null>(null);
   const [interactionError, setInteractionError] = useState<string | null>(null);
+
+  const refreshRiskProfile = useCallback(async () => {
+    setRiskProfileError(null);
+    try {
+      const response = await fetch(
+        `${backendUrl}/api/medication-lists/default/risk-profile`,
+      );
+      if (!response.ok) {
+        throw new Error("Risk questionnaire could not be loaded.");
+      }
+      setRiskProfile((await response.json()) as MedicationRiskProfile);
+    } catch (caughtError) {
+      setRiskProfileError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Risk questionnaire could not be loaded.",
+      );
+    }
+  }, [backendUrl]);
 
   useEffect(() => {
     async function loadMedicationList() {
@@ -43,6 +71,10 @@ export default function MedicationCabinetPage() {
 
     void loadMedicationList();
   }, [backendUrl]);
+
+  useEffect(() => {
+    void refreshRiskProfile();
+  }, [refreshRiskProfile]);
 
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -96,6 +128,7 @@ export default function MedicationCabinetPage() {
       setSearchResult(null);
       setInteractionScreening(null);
       setQuery("");
+      await refreshRiskProfile();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -120,6 +153,7 @@ export default function MedicationCabinetPage() {
       }
       setMedicationList((await response.json()) as MedicationList);
       setInteractionScreening(null);
+      await refreshRiskProfile();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -158,9 +192,67 @@ export default function MedicationCabinetPage() {
     }
   }
 
+  function updateRiskFactor(
+    factorKey: string,
+    updates: Partial<Pick<MedicationRiskFactor, "is_present" | "note">>,
+  ) {
+    setRiskProfile((currentProfile) => {
+      if (!currentProfile) {
+        return currentProfile;
+      }
+      return {
+        ...currentProfile,
+        factors: currentProfile.factors.map((factor) =>
+          factor.factor_key === factorKey ? { ...factor, ...updates } : factor,
+        ),
+      };
+    });
+  }
+
+  async function handleSaveRiskProfile() {
+    if (!riskProfile) {
+      return;
+    }
+
+    setIsSavingRiskProfile(true);
+    setRiskProfileError(null);
+    try {
+      const response = await fetch(
+        `${backendUrl}/api/medication-lists/default/risk-profile`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            factors: riskProfile.factors.map((factor) => ({
+              factor_key: factor.factor_key,
+              is_present: factor.is_present,
+              note: factor.note,
+            })),
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Risk questionnaire could not be saved.");
+      }
+      setRiskProfile((await response.json()) as MedicationRiskProfile);
+    } catch (caughtError) {
+      setRiskProfileError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Risk questionnaire could not be saved.",
+      );
+    } finally {
+      setIsSavingRiskProfile(false);
+    }
+  }
+
   const hasItems = (medicationList?.items.length ?? 0) > 0;
   const formatAssessmentValue = (value: string | null) =>
     value ? value.replaceAll("_", " ") : "Not classified";
+  const selectedRiskFactorCount =
+    riskProfile?.factors.filter(
+      (factor) => factor.is_present || Boolean(factor.note?.trim()),
+    ).length ?? 0;
 
   return (
     <main className="min-h-screen bg-[#f7faf9] px-6 py-6 text-slate-950">
@@ -319,6 +411,155 @@ export default function MedicationCabinetPage() {
               </div>
             )}
           </article>
+        </section>
+
+        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase text-teal-700">
+                Risk questionnaire
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-950">
+                Patient factors to review
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Select factors that may be worth discussing with a clinician or
+                pharmacist alongside this medication cabinet. This does not
+                diagnose, score, or give medical advice.
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                {selectedRiskFactorCount} selected
+              </span>
+              <button
+                type="button"
+                onClick={handleSaveRiskProfile}
+                disabled={!riskProfile || isSavingRiskProfile}
+                className="h-11 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {isSavingRiskProfile ? "Saving" : "Save questionnaire"}
+              </button>
+            </div>
+          </div>
+
+          {riskProfileError && (
+            <p className="mt-4 rounded-md bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+              {riskProfileError}
+            </p>
+          )}
+
+          {!riskProfile && !riskProfileError && (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {[0, 1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  className="h-24 animate-pulse rounded-md bg-slate-100"
+                />
+              ))}
+            </div>
+          )}
+
+          {riskProfile && (
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="grid gap-3 md:grid-cols-2">
+                {riskProfile.factors.map((factor) => (
+                  <label
+                    key={factor.factor_key}
+                    htmlFor={`risk-factor-${factor.factor_key}`}
+                    className="rounded-md border border-slate-200 p-4 transition hover:border-teal-200 hover:bg-teal-50/40"
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        id={`risk-factor-${factor.factor_key}`}
+                        type="checkbox"
+                        checked={factor.is_present}
+                        onChange={(event) =>
+                          updateRiskFactor(factor.factor_key, {
+                            is_present: event.target.checked,
+                          })
+                        }
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">
+                          {factor.label}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {factor.help_text}
+                        </p>
+                      </div>
+                    </div>
+                    {factor.input_type === "text" && (
+                      <input
+                        value={factor.note ?? ""}
+                        onChange={(event) =>
+                          updateRiskFactor(factor.factor_key, {
+                            note: event.target.value,
+                          })
+                        }
+                        placeholder="Optional details"
+                        className="mt-3 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+
+              <div className="rounded-md border border-teal-200 bg-teal-50 p-4">
+                <p className="text-sm font-semibold uppercase text-teal-800">
+                  Risk factors to discuss
+                </p>
+                {riskProfile.factors_to_discuss.length === 0 ? (
+                  <p className="mt-3 text-sm leading-6 text-teal-950">
+                    Saved questionnaire answers have not identified any factors
+                    to discuss yet. A clinician or pharmacist can still review
+                    the full medication list.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {riskProfile.factors_to_discuss.map((item) => (
+                      <article
+                        key={item.factor_key}
+                        className="rounded-md bg-white p-3"
+                      >
+                        <p className="text-sm font-semibold text-slate-950">
+                          {item.label}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                          {item.concern}
+                        </p>
+                        {(item.connected_categories.length > 0 ||
+                          item.matched_medications.length > 0) && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {item.connected_categories.map((category) => (
+                              <span
+                                key={category}
+                                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-600"
+                              >
+                                {formatAssessmentValue(category)}
+                              </span>
+                            ))}
+                            {item.matched_medications.map((medication) => (
+                              <span
+                                key={medication}
+                                className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"
+                              >
+                                {medication}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-4 border-t border-teal-200 pt-4 text-xs leading-5 text-teal-900">
+                  {riskProfile.disclaimer}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
